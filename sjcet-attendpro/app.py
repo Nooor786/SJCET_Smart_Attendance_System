@@ -76,26 +76,19 @@ CANON_TO_FILENAMES = {
 }
 
 def normalize_section(sec: str) -> str:
-    """Return canonical section name if known; otherwise the original string."""
     return ALIAS_TO_CANON.get(_loose_key(sec), sec)
 
 def find_csv_for_section(sec: str) -> str | None:
-    """
-    Given any section label (canonical or variant), locate the best-matching CSV
-    file in students_list/. Returns an absolute path or None.
-    """
     canon = normalize_section(sec)
     candidates = CANON_TO_FILENAMES.get(canon, [f"{canon}.csv"])
     for fname in candidates:
         p = os.path.join(STUDENTS_FOLDER, fname)
         if os.path.exists(p):
             return p
-    # final fallback: literal "<section>.csv"
     fallback = os.path.join(STUDENTS_FOLDER, f"{sec}.csv")
     return fallback if os.path.exists(fallback) else None
 
 def primary_filename_for_canon(canon: str) -> str:
-    """Return the preferred filename to save for a canonical section."""
     files = CANON_TO_FILENAMES.get(canon, [f"{canon}.csv"])
     return files[0]
 
@@ -241,15 +234,19 @@ APP_CSS = """
   border-radius: 12px !important;
   font-weight: 600 !important;
 }
-/* Attendance card look */
+/* Attendance card look (CONSTANT border color) */
 .attn-card {
   border-radius: 12px;
   padding: 10px 8px;
-  border: 2px solid var(--card-border, #2e7d32);
+  border: 2px solid #4f6b6d;   /* constant neutral border */
   text-align: center;
   background: rgba(255,255,255,0.02);
   backdrop-filter: blur(2px);
 }
+/* Compact toggle label under the card */
+.stToggle { text-align: center; margin-top: 6px !important; }
+.stToggle label { font-size: 0.9rem !important; font-weight: 600 !important; }
+
 /* Title */
 .centered-title {
   text-align: center;
@@ -453,6 +450,7 @@ if st.session_state.role == "Faculty":
 
     st.markdown("---")
 
+    # --- Cards with TOGGLE (constant color; no red/green logic) ---
     rows_chunks = [students[i:i+cols_per_row] for i in range(0, len(students), cols_per_row)]
     for row_students in rows_chunks:
         cols = st.columns(cols_per_row)
@@ -460,17 +458,21 @@ if st.session_state.role == "Faculty":
             roll = student[roll_col]
             name = student[name_col]
             is_present = st.session_state[key_base].get(roll, True)
-            border = "#388E3C" if is_present else "#D32F2F"
             with col:
                 st.markdown(
-                    f"<div class='attn-card' style='--card-border:{border}'>"
+                    f"<div class='attn-card'>"
                     f"<div style='font-weight:700'>{roll}</div>"
                     f"<div style='font-weight:600'>{name}</div>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
-                toggle = st.checkbox("Present", value=is_present, key=f"{key_base}_{roll}")
-                st.session_state[key_base][roll] = toggle
+                # Toggle switch
+                toggle_val = st.toggle(
+                    label="Present",
+                    value=is_present,
+                    key=f"{key_base}_{roll}_toggle",
+                )
+                st.session_state[key_base][roll] = toggle_val
 
     st.markdown("---")
     present_count = sum(1 for v in st.session_state[key_base].values() if v)
@@ -728,7 +730,6 @@ elif st.session_state.role == "HOD":
     elif main_mode == "Monthly Report":
         any_date_in_month = st.date_input("Pick any date in the month to report", date.today())
         month_start = any_date_in_month.replace(day=1)
-        # compute next month start
         if month_start.month == 12:
             next_month_start = month_start.replace(year=month_start.year+1, month=1, day=1)
         else:
@@ -761,7 +762,6 @@ elif st.session_state.role == "HOD":
 
     # MODE: Individual Student Report
     elif main_mode == "Individual Student Report":
-        # use resolver to get the correct students CSV
         student_file = find_csv_for_section(section)
         if not student_file or not os.path.exists(student_file):
             st.warning("Student list CSV not found for this section (checked aliases too). Please place the CSV in students_list/.")
