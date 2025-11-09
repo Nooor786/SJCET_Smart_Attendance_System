@@ -314,7 +314,11 @@ if st.sidebar.button("🚪 Logout"):
     st.rerun()
 
 st.sidebar.markdown("---")
-now = datetime.now().strftime("%d %b %Y — %I:%M %p")
+
+# ✅ Local timezone (India)
+from datetime import datetime
+from zoneinfo import ZoneInfo
+now = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y — %I:%M %p")
 st.sidebar.markdown(f"🕒 {now}")
 
 # ------------------------
