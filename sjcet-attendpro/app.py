@@ -1,51 +1,32 @@
-import streamlit as st
-import pandas as pd
+# app.py
 import os
-import sqlite3
-from datetime import date, datetime, timedelta
-from io import BytesIO
+import base64
 import hashlib
+from io import BytesIO
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-# ------------------------
-# Configuration
-# ------------------------
-import os, base64
+import pandas as pd
+import sqlite3
+import streamlit as st
+
+# =========================
+# Basic Config & Constants
+# =========================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # define BEFORE any use
 APP_TITLE = "SJCET - AttendPro (Advanced)"
 
-# ---- Title + centered logo (use once, near the top of the app) ----
-LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")  # make sure BASE_DIR is defined above
+# Streamlit page config MUST be called before any other Streamlit output
+st.set_page_config(page_title=APP_TITLE, layout="wide")
 
-def render_branding():
-    if os.path.exists(LOGO_PATH):
-        with open(LOGO_PATH, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
-        st.markdown(
-            f"""
-            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin: 6px 0 18px;">
-                <div class="centered-title">🎓 {APP_TITLE}</div>
-                <img src="data:image/png;base64,{b64}" alt="College Logo"
-                     style="width:160px; height:auto; border-radius:10px;" />
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"<div style='text-align:center; margin: 6px 0 18px;'>"
-            f"<div class='centered-title'>🎓 {APP_TITLE}</div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
-render_branding()
-
-# Candidates (both common layouts)
+# ------------------------
+# Where to store / read data
+# ------------------------
+# Try students_list/ in common layouts:
 CANDIDATE_STUDENTS_DIRS = [
     os.path.join(BASE_DIR, "students_list"),                      # app.py and folder at repo root
     os.path.join(BASE_DIR, "sjcet-attendpro", "students_list"),   # app.py at root, folder inside subdir
 ]
-
-# Pick the first that exists; otherwise create the first path
 for p in CANDIDATE_STUDENTS_DIRS:
     if os.path.exists(p) and os.path.isdir(p):
         STUDENTS_FOLDER = p
@@ -58,15 +39,92 @@ ATTENDANCE_FOLDER = os.path.join(BASE_DIR, "attendance_records")
 DB_PATH = os.path.join(BASE_DIR, "attendpro.db")
 os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
 
-# --- (Optional) debug: see what the server actually sees. Remove later. ---
-import glob
-try:
-    import streamlit as st  # already imported above, but safe if moved
-except Exception:
-    pass
-# ------------------------
+# =========================
+# UI: Global CSS
+# =========================
+APP_CSS = """
+<style>
+/* Full app background gradient */
+[data-testid="stAppViewContainer"] {
+  background: radial-gradient(1200px circle at 12% 8%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
+}
+/* Transparent header so gradient shows */
+[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
+/* Slightly tighter padding */
+.block-container { padding-top: 1.2rem; }
+/* Buttons: rounded & bold */
+.stButton>button {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+}
+/* Attendance card look (CONSTANT border color) */
+.attn-card {
+  border-radius: 12px;
+  padding: 10px 8px;
+  border: 2px solid #4f6b6d;   /* constant neutral border */
+  text-align: center;
+  background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(2px);
+}
+/* Compact toggle label under the card */
+.stToggle { text-align: center; margin-top: 6px !important; }
+.stToggle label { font-size: 0.9rem !important; font-weight: 600 !important; }
+
+/* Title style (used inside branding block) */
+.centered-title {
+  text-align: center;
+  font-weight: 800;
+  font-size: clamp(1.4rem, 2.6vw, 2.0rem);
+  margin: 0.5rem 0 0.6rem 0;
+}
+/* Dataframes spacing */
+[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
+  row-gap: 0.25rem !important;
+}
+/* Mobile tweaks */
+@media (max-width: 640px) {
+  .block-container { padding-left: 0.6rem; padding-right: 0.6rem; }
+  .centered-title { font-size: 1.3rem; }
+  .stButton>button { width: 100% !important; }
+  .attn-card { font-size: 0.95rem; padding: 8px 6px; }
+}
+</style>
+"""
+st.markdown(APP_CSS, unsafe_allow_html=True)
+
+# =========================
+# Branding: Centered Logo + Title (render ONCE)
+# =========================
+def render_branding():
+    logo_path = os.path.join(BASE_DIR, "sjcet_logo.png")
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        st.markdown(
+            f"""
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin: 4px 0 16px;">
+                <img src="data:image/png;base64,{b64}" alt="College Logo"
+                     style="width:160px; height:auto; border-radius:10px;" />
+                <div class="centered-title">🎓 {APP_TITLE}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"""
+            <div style="text-align:center; margin: 4px 0 16px;">
+                <div class="centered-title">🎓 {APP_TITLE}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+render_branding()
+
+# =========================
 # Section name normalization / alias resolver
-# ------------------------
+# =========================
 SECTION_CANONICALS = [
     "II-CSE_A", "II-CSE_B", "II-CSE_C", "II-CSD", "III-CSE", "III-CSD"
 ]
@@ -140,9 +198,9 @@ def primary_filename_for_canon(canon: str) -> str:
     files = CANON_TO_FILENAMES.get(canon, [f"{canon}.csv"])
     return files[0]
 
-# ------------------------
-# Utility Functions
-# ------------------------
+# =========================
+# DB & Auth Utilities
+# =========================
 SALT = "sjcet_attendpro_salt_2025"
 
 def hash_password(plain: str) -> str:
@@ -255,80 +313,21 @@ def get_attendance_rows(meta_id):
     conn.close()
     return rows
 
-# ------------------------
 # Initialize DB & defaults
-# ------------------------
 init_db()
 add_default_users()
 
-# ------------------------
-# Streamlit App Layout
-# ------------------------
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-
-# ---- Global UI polish: gradient background, softer cards, mobile tweaks ----
-APP_CSS = """
-<style>
-/* Full app background gradient */
-[data-testid="stAppViewContainer"] {
-  background: radial-gradient(1200px circle at 12% 8%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
-}
-/* Transparent header so gradient shows */
-[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
-/* Slightly tighter padding */
-.block-container { padding-top: 1.2rem; }
-/* Buttons: rounded & bold */
-.stButton>button {
-  border-radius: 12px !important;
-  font-weight: 600 !important;
-}
-/* Attendance card look (CONSTANT border color) */
-.attn-card {
-  border-radius: 12px;
-  padding: 10px 8px;
-  border: 2px solid #4f6b6d;   /* constant neutral border */
-  text-align: center;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(2px);
-}
-/* Compact toggle label under the card */
-.stToggle { text-align: center; margin-top: 6px !important; }
-.stToggle label { font-size: 0.9rem !important; font-weight: 600 !important; }
-
-/* Title */
-.centered-title {
-  text-align: center;
-  font-weight: 800;
-  font-size: clamp(1.4rem, 2.6vw, 2.0rem);
-  margin: 0.5rem 0 1rem 0;
-}
-/* Dataframes spacing */
-[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
-  row-gap: 0.25rem !important;
-}
-/* Mobile tweaks */
-@media (max-width: 640px) {
-  .block-container { padding-left: 0.6rem; padding-right: 0.6rem; }
-  .centered-title { font-size: 1.3rem; }
-  .stButton>button { width: 100% !important; }
-  .attn-card { font-size: 0.95rem; padding: 8px 6px; }
-}
-</style>
-"""
-st.markdown(APP_CSS, unsafe_allow_html=True)
-st.markdown(f"<div class=\"centered-title\">🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
-
-# ------------------------
-# Session State
-# ------------------------
+# =========================
+# Session State (Auth)
+# =========================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = None
     st.session_state.role = None
 
-# ------------------------
-# Authentication
-# ------------------------
+# =========================
+# Auth Screen
+# =========================
 if not st.session_state.logged_in:
     with st.container():
         st.subheader("🔐 Login")
@@ -347,9 +346,9 @@ if not st.session_state.logged_in:
                     st.error("Invalid username or password.")
     st.stop()
 
-# ------------------------
-# Sidebar (Profile + Logout)
-# ------------------------
+# =========================
+# Sidebar
+# =========================
 st.sidebar.markdown(f"**👤 {st.session_state.username}**")
 st.sidebar.markdown(f"**Role:** {st.session_state.role}")
 if st.sidebar.button("🚪 Logout"):
@@ -359,16 +358,12 @@ if st.sidebar.button("🚪 Logout"):
     st.rerun()
 
 st.sidebar.markdown("---")
-
-# ✅ Local timezone (India)
-from datetime import datetime
-from zoneinfo import ZoneInfo
 now = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y — %I:%M %p")
 st.sidebar.markdown(f"🕒 {now}")
 
-# ------------------------
+# =========================
 # Admin Panel
-# ------------------------
+# =========================
 if st.session_state.role == "Admin":
     st.header("⚙️ Admin Panel - User Management")
     conn = sqlite3.connect(DB_PATH)
@@ -395,9 +390,9 @@ if st.session_state.role == "Admin":
                     conn.close()
     st.stop()
 
-# ------------------------
-# Faculty Dashboard  (fixed six sections + alias resolver + 6 periods + mobile grid)
-# ------------------------
+# =========================
+# Faculty Dashboard
+# =========================
 if st.session_state.role == "Faculty":
     st.header(f"📋 Faculty Dashboard ({st.session_state.username})")
 
@@ -438,7 +433,7 @@ if st.session_state.role == "Faculty":
     student_file = find_csv_for_section(section)
 
     search_query = st.text_input("🔎 Search student by Name or Regd.")
-    period = st.selectbox("Select Period", ["1","2","3","4","5","6"], index=0)  # keep 6 periods
+    period = st.selectbox("Select Period", ["1","2","3","4","5","6"], index=0)  # 6 periods
     attendance_date = st.date_input("Select Date", date.today())
 
     # Mobile-friendly grid: let user choose columns (good on phones)
@@ -514,7 +509,6 @@ if st.session_state.role == "Faculty":
                     f"</div>",
                     unsafe_allow_html=True
                 )
-                # Toggle switch
                 toggle_val = st.toggle(
                     label="Present",
                     value=is_present,
@@ -574,9 +568,9 @@ if st.session_state.role == "Faculty":
         st.success("✅ Attendance submitted and saved.")
         st.balloons()
 
-# ------------------------
-# HOD Dashboard (Single + Aggregated + Daily/Weekly/Monthly + Individual)
-# ------------------------
+# =========================
+# HOD Dashboard
+# =========================
 elif st.session_state.role == "HOD":
     st.header("🏫 HOD Dashboard - Absentees & Reports")
 
@@ -603,7 +597,6 @@ elif st.session_state.role == "HOD":
         "Individual Student Report"
     ])
 
-    # helper: get metas for section
     def fetch_metas_for_section(sec, start=None, end=None):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -615,7 +608,6 @@ elif st.session_state.role == "HOD":
         conn.close()
         return metas
 
-    # helper: build dataframe aggregated from meta ids
     def aggregated_absentees_from_meta_ids(meta_list):
         if not meta_list:
             return pd.DataFrame()
@@ -630,7 +622,6 @@ elif st.session_state.role == "HOD":
         df = pd.DataFrame(rows, columns=["meta_id","Regd. No.","Name","Parent Name","Parent Phone"])
         return df
 
-    # MODE: Single Record
     if main_mode == "Single Record (saved attendance)":
         metas = fetch_metas_for_section(section)
         if not metas:
@@ -656,7 +647,6 @@ elif st.session_state.role == "HOD":
                 else:
                     st.success("🎉 All present in selected record.")
 
-    # MODE: Aggregated - All Periods on a Date
     elif main_mode == "Aggregated: All Periods on a Date":
         agg_date = st.date_input("Select Date to aggregate", date.today())
         if st.button("📋 Show Aggregated Absentees (Date)"):
@@ -683,7 +673,6 @@ elif st.session_state.role == "HOD":
                     towrite.seek(0)
                     st.download_button("📥 Download Aggregated (Excel)", towrite, file_name=f"aggregated_{section}_{agg_date}.xlsx")
 
-    # MODE: Aggregated - Date Range
     elif main_mode == "Aggregated: Date Range":
         col1, col2 = st.columns(2)
         with col1:
@@ -717,7 +706,6 @@ elif st.session_state.role == "HOD":
                         towrite.seek(0)
                         st.download_button("📥 Download Aggregated (Excel)", towrite, file_name=f"aggregated_{section}_{start_d}_to_{end_d}.xlsx")
 
-    # MODE: Daily Report
     elif main_mode == "Daily Report":
         daily_date = st.date_input("Select Date (Daily Report)", date.today())
         if st.button("📋 Show Daily Absentees"):
@@ -744,7 +732,6 @@ elif st.session_state.role == "HOD":
                     towrite.seek(0)
                     st.download_button("📥 Download Daily (Excel)", towrite, file_name=f"daily_absentees_{section}_{daily_date}.xlsx")
 
-    # MODE: Weekly Report (7 days)
     elif main_mode == "Weekly Report (7 days)":
         week_anchor = st.date_input("Pick a date (week shown will be that date - 6 days → date)", date.today())
         start_week = week_anchor - timedelta(days=6)
@@ -774,7 +761,6 @@ elif st.session_state.role == "HOD":
                     towrite.seek(0)
                     st.download_button("📥 Download Weekly (Excel)", towrite, file_name=f"weekly_absentees_{section}_{start_week}_to_{end_week}.xlsx")
 
-    # MODE: Monthly Report
     elif main_mode == "Monthly Report":
         any_date_in_month = st.date_input("Pick any date in the month to report", date.today())
         month_start = any_date_in_month.replace(day=1)
@@ -808,7 +794,6 @@ elif st.session_state.role == "HOD":
                     towrite.seek(0)
                     st.download_button("📥 Download Monthly (Excel)", towrite, file_name=f"monthly_absentees_{section}_{month_start.year}_{month_start.month}.xlsx")
 
-    # MODE: Individual Student Report
     elif main_mode == "Individual Student Report":
         student_file = find_csv_for_section(section)
         if not student_file or not os.path.exists(student_file):
@@ -832,7 +817,10 @@ elif st.session_state.role == "HOD":
                 elif student_mode == "Monthly":
                     any_date_m = st.date_input("Pick a date in the month", date.today())
                     start = any_date_m.replace(day=1)
-                    nm = start.replace(year=start.year+1, month=1, day=1) if start.month == 12 else start.replace(month=start.month+1, day=1)
+                    if start.month == 12:
+                        nm = start.replace(year=start.year+1, month=1, day=1)
+                    else:
+                        nm = start.replace(month=start.month+1, day=1)
                     end = nm - timedelta(days=1)
                     st.info(f"Month: {start.strftime('%B %Y')} ({start} → {end})")
                 else:
@@ -855,10 +843,6 @@ elif st.session_state.role == "HOD":
                             params = tuple([sel_regd] + meta_ids)
                             c.execute(q, params)
                             rows = c.fetchall()
-                            parent_name = students_df.loc[students_df['Regd. No.'].astype(str)==sel_regd, 'Father Name'].values
-                            parent_phone = students_df.loc[students_df['Regd. No.'].astype(str)==sel_regd, 'Parent Ph.-1'].values
-                            parent_name = parent_name[0] if len(parent_name)>0 else ""
-                            parent_phone = parent_phone[0] if len(parent_phone)>0 else ""
                             conn.close()
 
                             if not rows:
@@ -879,11 +863,8 @@ elif st.session_state.role == "HOD":
                                 towrite.seek(0)
                                 st.download_button("📥 Download Student Report (Excel)", towrite, file_name=f"student_{sel_regd}_{start}_to_{end}.xlsx")
 
-# ------------------------
+# =========================
 # Generic fallback
-# ------------------------
+# =========================
 else:
     st.info("Your role does not have a specific dashboard yet.")
-
- 
-    
