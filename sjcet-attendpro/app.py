@@ -9,20 +9,20 @@ import hashlib
 # ------------------------
 # Configuration
 # ------------------------
+import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 APP_TITLE = "SJCET - AttendPro (Advanced)"
 
-# 👉 your CSVs are under sjcet-attendpro/students_list in the repo
+# Your CSVs live at: sjcet-attendpro/students_list
 STUDENTS_FOLDER = os.path.join(BASE_DIR, "sjcet-attendpro", "students_list")
 
-# keep outputs next to app.py (or change if you want them inside sjcet-attendpro/)
+# Keep outputs next to app.py (change if you want them elsewhere)
 ATTENDANCE_FOLDER = os.path.join(BASE_DIR, "attendance_records")
 DB_PATH = os.path.join(BASE_DIR, "attendpro.db")
 
 os.makedirs(STUDENTS_FOLDER, exist_ok=True)
 os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
-
 # ------------------------
 # Section name normalization / alias resolver
 # ------------------------
