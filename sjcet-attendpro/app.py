@@ -13,6 +13,22 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 APP_TITLE = "SJCET - AttendPro"
+st.markdown(f"<div class=\"centered-title\">🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
+# --- College Logo below Title ---
+LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")
+
+if os.path.exists(LOGO_PATH):
+    st.markdown(
+        f"""
+        <div style='text-align:center; margin-bottom: 1rem;'>
+            <img src='data:image/png;base64,{open(LOGO_PATH, "rb").read().encode("base64").decode()}' 
+                 alt='College Logo' width='180'>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.caption("⚠️ Logo file not found. Place 'sjcet_logo.png' beside app.py")
 
 # Candidates (both common layouts)
 CANDIDATE_STUDENTS_DIRS = [
