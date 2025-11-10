@@ -10,10 +10,28 @@ import pandas as pd
 import sqlite3
 import streamlit as st
 
+# Optional rich tables + animations (safe fallbacks)
+try:
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+    HAS_AGGRID = True
+except Exception:
+    HAS_AGGRID = False
+
+try:
+    from streamlit_lottie import st_lottie
+    import json
+    HAS_LOTTIE = True
+except Exception:
+    HAS_LOTTIE = False
+
+# Matplotlib for simple charts (heatmap + sparkline)
+import matplotlib.pyplot as plt
+import numpy as np
+
 # =========================
 # Basic Config & Constants
 # =========================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # define BEFORE any use
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_TITLE = "SJCET - AttendPro"
 
 # Streamlit page config MUST be called before any other Streamlit output
@@ -22,10 +40,9 @@ st.set_page_config(page_title=APP_TITLE, layout="wide")
 # ------------------------
 # Where to store / read data
 # ------------------------
-# Try students_list/ in common layouts:
 CANDIDATE_STUDENTS_DIRS = [
-    os.path.join(BASE_DIR, "students_list"),                      # app.py and folder at repo root
-    os.path.join(BASE_DIR, "sjcet-attendpro", "students_list"),   # app.py at root, folder inside subdir
+    os.path.join(BASE_DIR, "students_list"),
+    os.path.join(BASE_DIR, "sjcet-attendpro", "students_list"),
 ]
 for p in CANDIDATE_STUDENTS_DIRS:
     if os.path.exists(p) and os.path.isdir(p):
@@ -40,60 +57,126 @@ DB_PATH = os.path.join(BASE_DIR, "attendpro.db")
 os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
 
 # =========================
-# UI: Global CSS
+# UI: Global CSS (Fancy Mode-ready)
 # =========================
 APP_CSS = """
 <style>
-/* Full app background gradient */
-[data-testid="stAppViewContainer"] {
+:root{
+  --glass-bg: rgba(255,255,255,0.06);
+  --glass-border: rgba(255,255,255,0.15);
+  --brand-1:#00d0ff;
+  --brand-2:#00ffa3;
+}
+
+/* Background (animated when .fancy present on body) */
+[data-testid="stAppViewContainer"]{
   background: radial-gradient(1200px circle at 12% 8%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
 }
-/* Transparent header so gradient shows */
-[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; }
-/* Slightly tighter padding */
-.block-container { padding-top: 1.2rem; }
-/* Buttons: rounded & bold */
-.stButton>button {
-  border-radius: 12px !important;
-  font-weight: 600 !important;
+.fancy [data-testid="stAppViewContainer"]{
+  animation: bgshift 14s ease-in-out infinite;
+  background: radial-gradient(1200px circle at 20% 10%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
 }
-/* Attendance card look (CONSTANT border color) */
-.attn-card {
-  border-radius: 12px;
-  padding: 10px 8px;
-  border: 2px solid #4f6b6d;
-  text-align: center;
-  background: rgba(255,255,255,0.02);
-  backdrop-filter: blur(2px);
+@keyframes bgshift{
+  0%{ background-position: 0% 0%; }
+  50%{ background-position: 100% 80%; }
+  100%{ background-position: 0% 0%; }
 }
-/* Compact toggle label under the card */
-.stToggle { text-align: center; margin-top: 6px !important; }
-.stToggle label { font-size: 0.9rem !important; font-weight: 600 !important; }
 
-/* Title style (used inside branding block) */
-.centered-title {
+[data-testid="stHeader"]{ background: rgba(0,0,0,0) !important; }
+.block-container{ padding-top: 1.2rem; }
+
+/* Buttons */
+.stButton>button{
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  border: 1px solid var(--glass-border) !important;
+  background: var(--glass-bg) !important;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s;
+  box-shadow: 0 6px 24px rgba(0,0,0,.15);
+}
+.fancy .stButton>button:hover{
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 10px 36px rgba(0,0,0,.25);
+  border-color: rgba(0,255,163,.35) !important;
+}
+
+/* Glass cards */
+.attn-card{
+  border-radius: 14px;
+  padding: 12px 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(6px);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   text-align: center;
-  font-weight: 800;
+}
+.fancy .attn-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(0,208,255,.35);
+  box-shadow: 0 12px 32px rgba(0,0,0,.28);
+}
+
+/* Title */
+.centered-title{
+  text-align:center;
+  font-weight:800;
   font-size: clamp(1.4rem, 2.6vw, 2.0rem);
-  margin: 0.5rem 0 0.6rem 0;
+  margin: .5rem 0 .6rem 0;
+  letter-spacing:.2px;
+  background: linear-gradient(90deg, var(--brand-1), var(--brand-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-/* Dataframes spacing */
-[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
-  row-gap: 0.25rem !important;
+
+/* Toggle label */
+.stToggle{ text-align:center; margin-top: 6px !important; }
+.stToggle label{ font-size:.9rem !important; font-weight:700 !important; }
+
+/* KPI pulse */
+.pulse{ position:relative; }
+.fancy .pulse::after{
+  content:"";
+  position:absolute; inset:-2px;
+  border-radius:14px;
+  animation:pulse 2.2s infinite ease-in-out;
+  border:1px solid rgba(0,255,163,.18);
 }
-/* Mobile tweaks */
-@media (max-width: 640px) {
-  .block-container { padding-left: 0.6rem; padding-right: 0.6rem; }
-  .centered-title { font-size: 1.3rem; }
-  .stButton>button { width: 100% !important; }
-  .attn-card { font-size: 0.95rem; padding: 8px 6px; }
+@keyframes pulse{
+  0%{ transform: scale(1); opacity:.9; }
+  70%{ transform: scale(1.03); opacity: 0; }
+  100%{ transform: scale(1.03); opacity: 0; }
+}
+
+/* Dataframe glass */
+[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"]{ row-gap:.25rem !important; }
+[data-testid="stDataFrame"]{
+  border-radius: 12px; overflow:hidden;
+  border:1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(6px);
+}
+
+/* Shimmer divider */
+.shimmer{
+  height:1px; width:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+  animation: shimmer 1.8s linear infinite;
+}
+@keyframes shimmer{ 0%{background-position:-200px 0;} 100%{background-position:200px 0;} }
+
+/* Mobile */
+@media (max-width:640px){
+  .block-container{ padding-left:.6rem; padding-right:.6rem; }
+  .centered-title{ font-size:1.3rem; }
+  .stButton>button{ width:100% !important; }
+  .attn-card{ font-size:.95rem; padding:8px 6px; }
 }
 </style>
 """
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 # =========================
-# Branding: Centered Logo + Title (render ONCE)
+# Branding: Centered Logo + Title
 # =========================
 def render_branding():
     logo_path = os.path.join(BASE_DIR, "sjcet_logo.png")
@@ -123,7 +206,7 @@ def render_branding():
 render_branding()
 
 # =========================
-# Section name normalization / alias resolver
+# Section aliasing
 # =========================
 SECTION_CANONICALS = [
     "II-CSE_A", "II-CSE_B", "II-CSE_C", "II-CSD", "III-CSE", "III-CSD"
@@ -168,10 +251,9 @@ ALIAS_TO_CANON = {
     # III-CSD
     _loose_key("III-CSD"):  "III-CSD",
     _loose_key("III CSD"):  "III-CSD",
-    _loose_key("lll-CSD"):  "III-CSD",  # uploaded alias
+    _loose_key("lll-CSD"):  "III-CSD",
 }
 
-# Preferred filenames per canonical section (first item is the canonical save name)
 CANON_TO_FILENAMES = {
     "II-CSE_A": ["II-CSE_A.csv", "II-CSE.A.csv"],
     "II-CSE_B": ["II-CSE_B.csv", "II-CSE.B.csv"],
@@ -319,6 +401,120 @@ init_db()
 add_default_users()
 
 # =========================
+# Fancy helpers (KPI, celebrate, table, plots)
+# =========================
+def kpi_row(title_left, value_left, delta_left,
+            title_mid, value_mid, delta_mid,
+            title_right, value_right, delta_right):
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        with st.container():
+            st.markdown('<div class="pulse">', unsafe_allow_html=True)
+            st.metric(title_left, value_left, delta=delta_left)
+            st.markdown("</div>", unsafe_allow_html=True)
+    with c2:
+        with st.container():
+            st.markdown('<div class="pulse">', unsafe_allow_html=True)
+            st.metric(title_mid, value_mid, delta=delta_mid)
+            st.markdown("</div>", unsafe_allow_html=True)
+    with c3:
+        with st.container():
+            st.markdown('<div class="pulse">', unsafe_allow_html=True)
+            st.metric(title_right, value_right, delta=delta_right)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+def celebrate(event="success"):
+    try:
+        if event == "success":
+            st.toast("Saved!", icon="✅")
+            st.snow()
+        elif event == "party":
+            st.balloons()
+        else:
+            st.balloons()
+    except Exception:
+        st.balloons()
+
+def render_table(df, key=None, height=460, fit_cols=True, editable=False, group_by=None, enable_sidebar=True):
+    if not HAS_AGGRID:
+        st.dataframe(df, use_container_width=True, height=height)
+        return
+    gob = GridOptionsBuilder.from_dataframe(df)
+    gob.configure_default_column(resizable=True, filter=True, sortable=True)
+    if editable:
+        gob.configure_grid_options(editable=True)
+    if group_by:
+        for col in group_by:
+            if col in df.columns:
+                gob.configure_column(col, rowGroup=True, hide=True)
+        gob.configure_grid_options(groupSelectsChildren=True, rowGroupPanelShow='always')
+    if enable_sidebar:
+        gob.configure_side_bar()
+    grid_options = gob.build()
+    AgGrid(
+        df,
+        gridOptions=grid_options,
+        height=height,
+        update_mode=GridUpdateMode.NO_UPDATE,
+        enable_enterprise_modules=False,
+        fit_columns_on_grid_load=fit_cols,
+        key=key
+    )
+
+def plot_attendance_heatmap(section, start, end, df_present_absent):
+    if df_present_absent.empty:
+        st.info("No data for heatmap.")
+        return
+    pivot = (df_present_absent
+             .groupby(['Regd. No.', 'Name', 'Date'], as_index=False)['Present']
+             .mean())
+    pivot['%'] = (pivot['Present'] * 100).round(0)
+    table = pivot.pivot_table(index=['Regd. No.', 'Name'], columns='Date', values='%')
+    table = table.sort_index()
+
+    fig_h = 0.28*max(5, table.shape[0])
+    fig, ax = plt.subplots(figsize=(min(10, 1 + 0.18*table.shape[1]), fig_h))
+    data = table.fillna(0).to_numpy()
+    im = ax.imshow(data, aspect='auto')
+    ax.set_yticks(range(table.shape[0]))
+    ax.set_yticklabels([f"{i[0]}" for i in table.index], fontsize=8)
+    ax.set_xticks(range(table.shape[1]))
+    ax.set_xticklabels([str(c) for c in table.columns], rotation=90, fontsize=7)
+    ax.set_title(f"Attendance Heatmap — {section}\n{start} → {end}", fontsize=10, pad=8)
+    plt.colorbar(im, ax=ax, fraction=0.026, pad=0.02, label="% per day")
+    st.pyplot(fig)
+
+def plot_sparkline(att_series, title):
+    if len(att_series) == 0:
+        st.info("No data.")
+        return
+    fig, ax = plt.subplots(figsize=(6, 1.7))
+    ax.plot(list(range(len(att_series))), att_series)
+    ax.set_ylim(0, 100)
+    ax.set_yticks([0, 50, 100])
+    ax.set_title(title, fontsize=10, pad=4)
+    ax.set_xticks([])
+    st.pyplot(fig)
+
+# =========================
+# Fancy Mode toggle + Lottie intro (optional)
+# =========================
+st.sidebar.markdown("---")
+fancy_mode = st.sidebar.toggle("✨ Fancy Mode", value=True, help="Turn on richer animations & styling")
+st.markdown(f"<script>document.body.classList.toggle('fancy',{str(fancy_mode).lower()});</script>", unsafe_allow_html=True)
+
+with st.expander("✨ Visual Intro", expanded=False):
+    if HAS_LOTTIE:
+        try:
+            with open(os.path.join(BASE_DIR, "intro.json"), "r") as f:
+                st_lottie(json.load(f), height=140, loop=True)
+        except Exception:
+            st.caption("Add an animation file named intro.json for an animated intro.")
+    else:
+        st.caption("Optional: pip install streamlit-lottie for header animations.")
+st.markdown("<div class='shimmer'></div>", unsafe_allow_html=True)
+
+# =========================
 # Session State (Auth)
 # =========================
 if "logged_in" not in st.session_state:
@@ -333,11 +529,7 @@ if not st.session_state.logged_in:
     with st.container():
         st.subheader("🔐 Login")
 
-        # 1) Pick expected role first
-        selected_role = st.selectbox(
-            "Select Role",
-            ["Faculty", "Coordinator", "HOD", "Admin"]
-        )
+        selected_role = st.selectbox("Select Role", ["Faculty", "Coordinator", "HOD", "Admin"])
 
         cols = st.columns([1,2,1])
         with cols[1]:
@@ -379,7 +571,7 @@ if st.session_state.role == "Admin":
     conn = sqlite3.connect(DB_PATH)
     users_df = pd.read_sql_query("SELECT username, role FROM users", conn)
     conn.close()
-    st.dataframe(users_df, use_container_width=True)
+    render_table(users_df, key="admin_users_grid")
 
     with st.expander("Add / Update User"):
         uname = st.text_input("Username", key="adm_user")
@@ -395,7 +587,7 @@ if st.session_state.role == "Admin":
                     conn.commit()
                     st.success("User saved.")
                 except Exception as e:
-                    st.error(e)
+                    st.error(str(e))
                 finally:
                     conn.close()
     st.stop()
@@ -406,7 +598,7 @@ if st.session_state.role == "Admin":
 if st.session_state.role == "Faculty":
     st.header(f"📋 Faculty Dashboard ({st.session_state.username})")
 
-    # Determine available vs missing canonical sections based on files present (via resolver)
+    # available/missing sections
     available_sections, missing_sections = [], []
     for canon in SECTION_CANONICALS:
         path = find_csv_for_section(canon)
@@ -420,7 +612,6 @@ if st.session_state.role == "Faculty":
     else:
         st.success(f"Sections ready: {', '.join(available_sections)}")
 
-    # Upload helper for any missing section
     if missing_sections:
         with st.expander("Upload missing section CSV(s)"):
             up_sec = st.selectbox("Select section to upload", missing_sections)
@@ -436,29 +627,22 @@ if st.session_state.role == "Faculty":
     if not available_sections:
         st.stop()
 
-    # Section selector from available canonicals
     section = st.selectbox("Select Section", available_sections)
-
-    # Resolve actual CSV file for this section (aliases supported)
     student_file = find_csv_for_section(section)
 
     search_query = st.text_input("🔎 Search student by Name or Regd.")
     period = st.selectbox("Select Period", ["1","2","3","4","5","6"], index=0)
     attendance_date = st.date_input("Select Date", date.today())
 
-    # Mobile-friendly grid: choose columns
     col_choice = st.radio("Card columns (mobile friendly)", options=[1, 2, 4], index=1, horizontal=True)
     cols_per_row = col_choice
 
-    # Load students CSV
     if not student_file or not os.path.exists(student_file):
         st.error(f"CSV not found for {section}. Place the CSV in {STUDENTS_FOLDER}/")
         st.stop()
 
     students = pd.read_csv(student_file)
     students.columns = students.columns.str.strip()
-
-    # Basic validation
     req_cols = ["Regd. No.", "Name"]
     for rc in req_cols:
         if rc not in students.columns:
@@ -498,7 +682,7 @@ if st.session_state.role == "Faculty":
 
     st.markdown("---")
 
-    # --- Cards with TOGGLE (constant color) ---
+    # Card toggles
     rows_chunks = [students[i:i+cols_per_row] for i in range(0, len(students), cols_per_row)]
     for row_students in rows_chunks:
         cols = st.columns(cols_per_row)
@@ -525,11 +709,13 @@ if st.session_state.role == "Faculty":
     present_count = sum(1 for v in st.session_state[key_base].values() if v)
     total_students = len(st.session_state[key_base]) if st.session_state[key_base] else 0
     pct = (present_count/total_students*100) if total_students else 0.0
-    st.info(f"✅ Summary: {present_count}/{total_students} present — {pct:.1f}%")
+
+    kpi_row("Present", f"{present_count}", f"{pct:.1f}%",
+            "Total", f"{total_students}", "class size",
+            "Absent", f"{total_students - present_count}", f"{100-pct:.1f}%")
 
     if st.button("📤 Submit Attendance", use_container_width=True):
         absent_list, rows_to_save = [], []
-        # iterate over original full CSV (not filtered by search)
         full_df = pd.read_csv(student_file)
         full_df.columns = full_df.columns.str.strip()
         for _, row in full_df.iterrows():
@@ -550,7 +736,7 @@ if st.session_state.role == "Faculty":
                     row.get("Parent Ph.-1", "")
                 ])
 
-        meta_id = save_attendance_to_db(section, attendance_date, period, st.session_state.username, rows_to_save)
+        _ = save_attendance_to_db(section, attendance_date, period, st.session_state.username, rows_to_save)
 
         section_folder = os.path.join(ATTENDANCE_FOLDER, section)
         os.makedirs(section_folder, exist_ok=True)
@@ -571,15 +757,15 @@ if st.session_state.role == "Faculty":
             header_info.to_csv(f, index=False); f.write('\n'); df_absent.to_csv(f, index=False)
 
         st.success("✅ Attendance submitted and saved.")
-        st.balloons()
+        celebrate("success")
 
 # =========================
 # HOD Dashboard
 # =========================
 elif st.session_state.role == "HOD":
-    st.header("🏫 HOD Dashboard - Absentees & Reports")
+    st.header("🏫 HOD Dashboard — Absentees & Reports")
 
-    # fetch sections available (from records)
+    # sections with data
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT section FROM attendance_meta ORDER BY section")
@@ -592,7 +778,7 @@ elif st.session_state.role == "HOD":
 
     section = st.selectbox("Select Section", sections_db)
 
-    # ---------- NEW: Quick Student % Lookup ----------
+    # ---------- Quick Student % Lookup ----------
     with st.expander("🔎 Quick Student Attendance % Lookup"):
         q = st.text_input("Search by Name or Regd. No.")
         colx, coly = st.columns(2)
@@ -601,11 +787,9 @@ elif st.session_state.role == "HOD":
         with coly:
             end_q = st.date_input("End (optional)", value=None, key="hod_q_end")
 
-        # Normalize empty dates
         if start_q and end_q and start_q > end_q:
             st.error("Start must be before or equal to End.")
         elif q:
-            # Resolve matching students from section CSV (prefer exact Regd. match, else name contains)
             student_file = find_csv_for_section(section)
             if not student_file or not os.path.exists(student_file):
                 st.warning("Student list CSV not found for this section.")
@@ -620,7 +804,6 @@ elif st.session_state.role == "HOD":
                 if matches.empty:
                     st.info("No matching student found in the section CSV.")
                 else:
-                    # Get metas for range or full history
                     def fetch_metas(sec, s=None, e=None):
                         conn = sqlite3.connect(DB_PATH)
                         cur = conn.cursor()
@@ -647,7 +830,6 @@ elif st.session_state.role == "HOD":
                     else:
                         meta_ids = [m[0] for m in metas]
                         total_classes = len(meta_ids)
-
                         conn = sqlite3.connect(DB_PATH)
                         cur = conn.cursor()
                         placeholders = ",".join(["?"] * len(meta_ids))
@@ -669,7 +851,7 @@ elif st.session_state.role == "HOD":
                             columns=["Regd. No.", "Name", "Presents", "Total Classes", "Absences", "% Attendance"]
                         ).sort_values("% Attendance", ascending=True)
 
-                        st.dataframe(out_df, use_container_width=True)
+                        render_table(out_df, key="hod_quick_lookup")
                         towrite = BytesIO()
                         out_df.to_excel(towrite, index=False, sheet_name="student_percent_lookup")
                         towrite.seek(0)
@@ -743,7 +925,7 @@ elif st.session_state.role == "HOD":
                 if rows:
                     df_abs = pd.DataFrame(rows, columns=["Regd. No.", "Name", "Parent Name", "Parent Phone"])
                     st.subheader("❌ Absentees (Selected Record)")
-                    st.dataframe(df_abs, use_container_width=True)
+                    render_table(df_abs, key="hod_single")
                     towrite = BytesIO()
                     df_abs.to_excel(towrite, index=False, sheet_name='absentees_single')
                     towrite.seek(0)
@@ -771,7 +953,7 @@ elif st.session_state.role == "HOD":
                     }).rename(columns={'meta_id': 'Absence Count'})
                     df_group = df_group[["Regd. No.","Name","Parent Name","Parent Phone","Period_Date","Absence Count"]].sort_values("Absence Count", ascending=False).reset_index(drop=True)
                     st.subheader(f"❌ Aggregated Absentees for {agg_date}")
-                    st.dataframe(df_group, use_container_width=True)
+                    render_table(df_group, key="hod_agg_date", group_by=["Regd. No.","Name"])
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='agg_date')
                     towrite.seek(0)
@@ -804,7 +986,7 @@ elif st.session_state.role == "HOD":
                         }).rename(columns={'meta_id': 'Absence Count'})
                         df_group = df_group[["Regd. No.","Name","Parent Name","Parent Phone","Period_Date","Absence Count"]].sort_values("Absence Count", ascending=False).reset_index(drop=True)
                         st.subheader(f"❌ Aggregated Absentees {start_d} → {end_d}")
-                        st.dataframe(df_group, use_container_width=True)
+                        render_table(df_group, key="hod_agg_range", group_by=["Regd. No.","Name"])
                         towrite = BytesIO()
                         df_group.to_excel(towrite, index=False, sheet_name='agg_range')
                         towrite.seek(0)
@@ -830,7 +1012,7 @@ elif st.session_state.role == "HOD":
                     }).rename(columns={'meta_id': 'Absence Count'})
                     df_group = df_group[["Regd. No.","Name","Parent Name","Parent Phone","Period_Date","Absence Count"]].sort_values("Absence Count", ascending=False).reset_index(drop=True)
                     st.subheader(f"📅 Daily Absentees on {daily_date}")
-                    st.dataframe(df_group, use_container_width=True)
+                    render_table(df_group, key="hod_daily")
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='daily')
                     towrite.seek(0)
@@ -859,7 +1041,7 @@ elif st.session_state.role == "HOD":
                     }).rename(columns={'meta_id': 'Absence Count'})
                     df_group = df_group[["Regd. No.","Name","Parent Name","Parent Phone","Period_Date","Absence Count"]].sort_values("Absence Count", ascending=False).reset_index(drop=True)
                     st.subheader(f"📆 Weekly Absentees {start_week} → {end_week}")
-                    st.dataframe(df_group, use_container_width=True)
+                    render_table(df_group, key="hod_weekly")
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='weekly')
                     towrite.seek(0)
@@ -892,7 +1074,7 @@ elif st.session_state.role == "HOD":
                     }).rename(columns={'meta_id': 'Absence Count'})
                     df_group = df_group[["Regd. No.","Name","Parent Name","Parent Phone","Period_Date","Absence Count"]].sort_values("Absence Count", ascending=False).reset_index(drop=True)
                     st.subheader(f"🗓️ Monthly Absentees: {month_start.strftime('%B %Y')}")
-                    st.dataframe(df_group, use_container_width=True)
+                    render_table(df_group, key="hod_monthly")
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='monthly')
                     towrite.seek(0)
@@ -960,7 +1142,7 @@ elif st.session_state.role == "HOD":
                                 df['Period'] = df['meta_id'].map(lambda x: meta_map[x]['period'])
                                 df = df[["Regd. No.","Name","Date","Period","Parent Name","Parent Phone"]].sort_values(["Date","Period"]).reset_index(drop=True)
                                 st.subheader(f"👤 Absence details: {sel_regd}")
-                                st.dataframe(df, use_container_width=True)
+                                render_table(df, key="hod_student_detail")
                                 st.markdown(f"**Total Absences:** {len(df)}")
                                 towrite = BytesIO()
                                 df.to_excel(towrite, index=False, sheet_name='student_absences')
@@ -977,16 +1159,14 @@ elif st.session_state.role == "HOD":
             st.error("Start Date must be before or equal to End Date.")
             st.stop()
 
-        # Fetch all attendance sessions (metas) for the section within range
         metas = fetch_metas_for_section(section, start=start_d, end=end_d)
         if not metas:
             st.info("No attendance sessions in this date range.")
             st.stop()
 
         meta_ids = [m[0] for m in metas]
-        total_classes = len(meta_ids)  # each meta is one period entry
+        total_classes = len(meta_ids)
 
-        # Build a presence table by student
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         q = f"""
@@ -1008,7 +1188,6 @@ elif st.session_state.role == "HOD":
         df["Absences"] = df["Total Classes"] - df["Presents"]
         df["% Attendance"] = (df["Presents"] / df["Total Classes"] * 100).round(2)
 
-        # Include all students from the section CSV (even if never marked)
         student_file = find_csv_for_section(section)
         if student_file and os.path.exists(student_file):
             base_students = pd.read_csv(student_file)[["Regd. No.", "Name"]]
@@ -1025,7 +1204,26 @@ elif st.session_state.role == "HOD":
             df = merged
 
         st.subheader(f"📊 Attendance % — {section}  ({start_d} → {end_d})")
-        st.dataframe(df.sort_values("% Attendance"), use_container_width=True)
+        render_table(df.sort_values("% Attendance"), key="hod_pct_table")
+
+        # Daily presence table for charts
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        placeholders = ",".join(["?"] * len(meta_ids))
+        c.execute(f"""
+            SELECT ar.regd_no, ar.name, am.attendance_date, ar.present
+            FROM attendance_rows ar
+            JOIN attendance_meta am ON am.id = ar.meta_id
+            WHERE ar.meta_id IN ({placeholders})
+        """, tuple(meta_ids))
+        rows_pa = c.fetchall()
+        conn.close()
+
+        if rows_pa:
+            df_pa = pd.DataFrame(rows_pa, columns=["Regd. No.", "Name", "Date", "Present"])
+            plot_attendance_heatmap(section, start_d, end_d, df_pa)
+            day_pct = (df_pa.groupby("Date")["Present"].mean() * 100).round(1).tolist()
+            plot_sparkline(day_pct, title="Section % trend (daily)")
 
         towrite = BytesIO()
         df.to_excel(towrite, index=False, sheet_name="attendance_percent")
@@ -1040,9 +1238,8 @@ elif st.session_state.role == "HOD":
 # Coordinator Dashboard
 # ======================
 elif st.session_state.role == "Coordinator":
-    st.header("👥 Coordinator Dashboard - Absentees (Read-only)")
+    st.header("👥 Coordinator Dashboard — Absentees (Read-only)")
 
-    # Pull sections that actually have attendance saved
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT section FROM attendance_meta ORDER BY section")
@@ -1064,7 +1261,6 @@ elif st.session_state.role == "Coordinator":
         st.error("Start Date must be before or equal to End Date.")
         st.stop()
 
-    # Get metas in range
     def _fetch_metas(sec, start, end):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -1085,7 +1281,6 @@ elif st.session_state.role == "Coordinator":
     meta_ids = [m[0] for m in metas]
     meta_map = {m[0]: {"date": m[1], "period": m[2]} for m in metas}
 
-    # Pull absentees for those meta_ids
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     q = f"""
@@ -1104,9 +1299,6 @@ elif st.session_state.role == "Coordinator":
     df = pd.DataFrame(rows, columns=["meta_id", "Regd. No.", "Name", "Parent Name", "Parent Phone"])
     df["Period"] = df["meta_id"].map(lambda x: meta_map[x]["period"])
     df["Date"] = df["meta_id"].map(lambda x: meta_map[x]["date"])
-
-    # ---- NEW: build per-period absence columns P1..P6 (counts) ----
-    # Ensure period is string/number 1..6
     df["Period"] = df["Period"].astype(str)
 
     base_group_cols = ["Regd. No.", "Name", "Parent Name", "Parent Phone"]
@@ -1115,17 +1307,13 @@ elif st.session_state.role == "Coordinator":
           .size()
           .unstack("Period", fill_value=0)
     )
-
-    # Guarantee columns P1..P6 exist
     for p in ["1","2","3","4","5","6"]:
         if p not in pivot.columns:
             pivot[p] = 0
-
     pivot = pivot[["1","2","3","4","5","6"]]
     pivot.columns = [f"P{c}" for c in pivot.columns]
     pivot = pivot.reset_index()
 
-    # Also keep a compact list of Date (P#) instances like before
     df["Date-Period"] = df.apply(lambda r: f"{r['Date']} (P{r['Period']})", axis=1)
     compact = (
         df.groupby(base_group_cols, as_index=False)
@@ -1136,15 +1324,13 @@ elif st.session_state.role == "Coordinator":
     agg = pivot.merge(compact, on=base_group_cols, how="left")
     period_cols = ["P1","P2","P3","P4","P5","P6"]
     agg["Absence Count"] = agg[period_cols].sum(axis=1)
-
     agg = agg.loc[:, base_group_cols + period_cols + ["Absence Count", "Periods Absent"]] \
              .sort_values(["Absence Count", "Regd. No."], ascending=[False, True]) \
              .reset_index(drop=True)
 
     st.subheader(f"❌ Absentees — {section} ({start_d} → {end_d})")
-    st.dataframe(agg, use_container_width=True)
+    render_table(agg, key="coord_abs_grid")
 
-    # CSV download (contains P1..P6 columns)
     csv_bytes = agg.to_csv(index=False).encode("utf-8")
     st.download_button(
         "📥 Download Absentees (CSV)",
