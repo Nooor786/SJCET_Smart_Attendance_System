@@ -14,7 +14,7 @@ import streamlit as st
 # Basic Config & Constants
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # define BEFORE any use
-APP_TITLE = "SJCET - AttendPro (Advanced)"
+APP_TITLE = "SJCET - AttendPro"
 
 # Streamlit page config MUST be called before any other Streamlit output
 st.set_page_config(page_title=APP_TITLE, layout="wide")
