@@ -37,9 +37,6 @@ os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
 import glob
 try:
     import streamlit as st  # already imported above, but safe if moved
-    st.caption(f"Using students_list at: {STUDENTS_FOLDER}")
-    st.caption("Exists? " + str(os.path.exists(STUDENTS_FOLDER)))
-    st.caption("Files: " + (", ".join(sorted([os.path.basename(f) for f in glob.glob(os.path.join(STUDENTS_FOLDER, "*.csv"))])) or "(none)"))
 except Exception:
     pass
 # ------------------------
