@@ -24,10 +24,6 @@ try:
 except Exception:
     HAS_LOTTIE = False
 
-# Matplotlib for simple charts (heatmap + sparkline)
-import matplotlib.pyplot as plt
-import numpy as np
-
 # =========================
 # Basic Config & Constants
 # =========================
@@ -221,34 +217,23 @@ def _loose_key(s: str) -> str:
     )
 
 ALIAS_TO_CANON = {
-    # II-CSE_A
     _loose_key("II-CSE_A"): "II-CSE_A",
     _loose_key("II CSE A"): "II-CSE_A",
     _loose_key("II-CSE.A"): "II-CSE_A",
-
-    # II-CSE_B
     _loose_key("II-CSE_B"): "II-CSE_B",
     _loose_key("II CSE B"): "II-CSE_B",
     _loose_key("II-CSE.B"): "II-CSE_B",
-
-    # II-CSE_C
     _loose_key("II-CSE_C"): "II-CSE_C",
     _loose_key("II CSE C"): "II-CSE_C",
     _loose_key("II-CSE.C"): "II-CSE_C",
-
-    # II-CSD (CSE-DS)
     _loose_key("II-CSD"):   "II-CSD",
     _loose_key("CSE_DS"):   "II-CSD",
     _loose_key("CSE.DS"):   "II-CSD",
     _loose_key("II-CSE_DS"):"II-CSD",
     _loose_key("II-CSE.DS"):"II-CSD",
     _loose_key("II CSE DS"):"II-CSD",
-
-    # III-CSE
     _loose_key("III-CSE"):  "III-CSE",
     _loose_key("III CSE"):  "III-CSE",
-
-    # III-CSD
     _loose_key("III-CSD"):  "III-CSD",
     _loose_key("III CSD"):  "III-CSD",
     _loose_key("lll-CSD"):  "III-CSD",
@@ -401,7 +386,7 @@ init_db()
 add_default_users()
 
 # =========================
-# Fancy helpers (KPI, celebrate, table, plots)
+# Fancy helpers (KPI, celebrate, table)
 # =========================
 def kpi_row(title_left, value_left, delta_left,
             title_mid, value_mid, delta_mid,
@@ -461,57 +446,24 @@ def render_table(df, key=None, height=460, fit_cols=True, editable=False, group_
         key=key
     )
 
-def plot_attendance_heatmap(section, start, end, df_present_absent):
-    if df_present_absent.empty:
-        st.info("No data for heatmap.")
-        return
-    pivot = (df_present_absent
-             .groupby(['Regd. No.', 'Name', 'Date'], as_index=False)['Present']
-             .mean())
-    pivot['%'] = (pivot['Present'] * 100).round(0)
-    table = pivot.pivot_table(index=['Regd. No.', 'Name'], columns='Date', values='%')
-    table = table.sort_index()
-
-    fig_h = 0.28*max(5, table.shape[0])
-    fig, ax = plt.subplots(figsize=(min(10, 1 + 0.18*table.shape[1]), fig_h))
-    data = table.fillna(0).to_numpy()
-    im = ax.imshow(data, aspect='auto')
-    ax.set_yticks(range(table.shape[0]))
-    ax.set_yticklabels([f"{i[0]}" for i in table.index], fontsize=8)
-    ax.set_xticks(range(table.shape[1]))
-    ax.set_xticklabels([str(c) for c in table.columns], rotation=90, fontsize=7)
-    ax.set_title(f"Attendance Heatmap — {section}\n{start} → {end}", fontsize=10, pad=8)
-    plt.colorbar(im, ax=ax, fraction=0.026, pad=0.02, label="% per day")
-    st.pyplot(fig)
-
-def plot_sparkline(att_series, title):
-    if len(att_series) == 0:
-        st.info("No data.")
-        return
-    fig, ax = plt.subplots(figsize=(6, 1.7))
-    ax.plot(list(range(len(att_series))), att_series)
-    ax.set_ylim(0, 100)
-    ax.set_yticks([0, 50, 100])
-    ax.set_title(title, fontsize=10, pad=4)
-    ax.set_xticks([])
-    st.pyplot(fig)
-
 # =========================
-# Fancy Mode toggle + Lottie intro (optional)
+# Fancy Mode toggle + Visual Intro (auto)
 # =========================
 st.sidebar.markdown("---")
 fancy_mode = st.sidebar.toggle("✨ Fancy Mode", value=True, help="Turn on richer animations & styling")
 st.markdown(f"<script>document.body.classList.toggle('fancy',{str(fancy_mode).lower()});</script>", unsafe_allow_html=True)
 
-with st.expander("✨ Visual Intro", expanded=False):
+# Always show Visual Intro on load (no expander, auto display)
+intro_container = st.container()
+with intro_container:
     if HAS_LOTTIE:
         try:
             with open(os.path.join(BASE_DIR, "intro.json"), "r") as f:
                 st_lottie(json.load(f), height=140, loop=True)
         except Exception:
-            st.caption("Add an animation file named intro.json for an animated intro.")
+            st.caption("Tip: Add a Lottie animation named intro.json next to app.py for a visual intro.")
     else:
-        st.caption("Optional: pip install streamlit-lottie for header animations.")
+        st.caption("Optional: pip install streamlit-lottie to show a visual intro animation.")
 st.markdown("<div class='shimmer'></div>", unsafe_allow_html=True)
 
 # =========================
@@ -598,7 +550,6 @@ if st.session_state.role == "Admin":
 if st.session_state.role == "Faculty":
     st.header(f"📋 Faculty Dashboard ({st.session_state.username})")
 
-    # available/missing sections
     available_sections, missing_sections = [], []
     for canon in SECTION_CANONICALS:
         path = find_csv_for_section(canon)
@@ -760,12 +711,11 @@ if st.session_state.role == "Faculty":
         celebrate("success")
 
 # =========================
-# HOD Dashboard
+# HOD Dashboard (NO charts/heatmaps)
 # =========================
 elif st.session_state.role == "HOD":
     st.header("🏫 HOD Dashboard — Absentees & Reports")
 
-    # sections with data
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT section FROM attendance_meta ORDER BY section")
@@ -778,7 +728,7 @@ elif st.session_state.role == "HOD":
 
     section = st.selectbox("Select Section", sections_db)
 
-    # ---------- Quick Student % Lookup ----------
+    # Quick Student % Lookup (no charts)
     with st.expander("🔎 Quick Student Attendance % Lookup"):
         q = st.text_input("Search by Name or Regd. No.")
         colx, coly = st.columns(2)
@@ -860,7 +810,6 @@ elif st.session_state.role == "HOD":
                             towrite,
                             file_name=f"student_percent_lookup_{section}.xlsx"
                         )
-    # ---------- End Quick Lookup ----------
 
     main_mode = st.selectbox("Choose Report Area", [
         "Single Record (saved attendance)",
@@ -1205,25 +1154,6 @@ elif st.session_state.role == "HOD":
 
         st.subheader(f"📊 Attendance % — {section}  ({start_d} → {end_d})")
         render_table(df.sort_values("% Attendance"), key="hod_pct_table")
-
-        # Daily presence table for charts
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        placeholders = ",".join(["?"] * len(meta_ids))
-        c.execute(f"""
-            SELECT ar.regd_no, ar.name, am.attendance_date, ar.present
-            FROM attendance_rows ar
-            JOIN attendance_meta am ON am.id = ar.meta_id
-            WHERE ar.meta_id IN ({placeholders})
-        """, tuple(meta_ids))
-        rows_pa = c.fetchall()
-        conn.close()
-
-        if rows_pa:
-            df_pa = pd.DataFrame(rows_pa, columns=["Regd. No.", "Name", "Date", "Present"])
-            plot_attendance_heatmap(section, start_d, end_d, df_pa)
-            day_pct = (df_pa.groupby("Date")["Present"].mean() * 100).round(1).tolist()
-            plot_sparkline(day_pct, title="Section % trend (daily)")
 
         towrite = BytesIO()
         df.to_excel(towrite, index=False, sheet_name="attendance_percent")
