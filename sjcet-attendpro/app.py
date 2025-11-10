@@ -61,7 +61,7 @@ APP_CSS = """
 .attn-card {
   border-radius: 12px;
   padding: 10px 8px;
-  border: 2px solid #4f6b6d;   /* constant neutral border */
+  border: 2px solid #4f6b6d;
   text-align: center;
   background: rgba(255,255,255,0.02);
   backdrop-filter: blur(2px);
@@ -327,24 +327,33 @@ if "logged_in" not in st.session_state:
     st.session_state.role = None
 
 # =========================
-# Auth Screen
+# Auth Screen (ROLE FIRST)
 # =========================
 if not st.session_state.logged_in:
     with st.container():
         st.subheader("🔐 Login")
+
+        # 1) Pick expected role first
+        selected_role = st.selectbox(
+            "Select Role",
+            ["Faculty", "Coordinator", "HOD", "Admin"]
+        )
+
         cols = st.columns([1,2,1])
         with cols[1]:
             username = st.text_input("Username", placeholder="Enter username")
             password = st.text_input("Password", type="password", placeholder="Enter password")
             if st.button("Login", use_container_width=True):
-                ok, role = check_user(username.strip(), password)
-                if ok:
+                ok, role_in_db = check_user(username.strip(), password)
+                if not ok:
+                    st.error("Invalid username or password.")
+                elif role_in_db != selected_role:
+                    st.error(f"Role mismatch: your account role is '{role_in_db}', not '{selected_role}'.")
+                else:
                     st.session_state.logged_in = True
                     st.session_state.username = username.strip()
-                    st.session_state.role = role
+                    st.session_state.role = role_in_db
                     st.rerun()
-                else:
-                    st.error("Invalid username or password.")
     st.stop()
 
 # =========================
@@ -434,16 +443,11 @@ if st.session_state.role == "Faculty":
     student_file = find_csv_for_section(section)
 
     search_query = st.text_input("🔎 Search student by Name or Regd.")
-    period = st.selectbox("Select Period", ["1","2","3","4","5","6"], index=0)  # 6 periods
+    period = st.selectbox("Select Period", ["1","2","3","4","5","6"], index=0)
     attendance_date = st.date_input("Select Date", date.today())
 
-    # Mobile-friendly grid: let user choose columns (good on phones)
-    col_choice = st.radio(
-        "Card columns (mobile friendly)",
-        options=[1, 2, 4],
-        index=1,  # default = 2
-        horizontal=True
-    )
+    # Mobile-friendly grid: choose columns
+    col_choice = st.radio("Card columns (mobile friendly)", options=[1, 2, 4], index=1, horizontal=True)
     cols_per_row = col_choice
 
     # Load students CSV
@@ -494,7 +498,7 @@ if st.session_state.role == "Faculty":
 
     st.markdown("---")
 
-    # --- Cards with TOGGLE (constant color; no red/green logic) ---
+    # --- Cards with TOGGLE (constant color) ---
     rows_chunks = [students[i:i+cols_per_row] for i in range(0, len(students), cols_per_row)]
     for row_students in rows_chunks:
         cols = st.columns(cols_per_row)
@@ -587,6 +591,94 @@ elif st.session_state.role == "HOD":
         st.stop()
 
     section = st.selectbox("Select Section", sections_db)
+
+    # ---------- NEW: Quick Student % Lookup ----------
+    with st.expander("🔎 Quick Student Attendance % Lookup"):
+        q = st.text_input("Search by Name or Regd. No.")
+        colx, coly = st.columns(2)
+        with colx:
+            start_q = st.date_input("Start (optional)", value=None, key="hod_q_start")
+        with coly:
+            end_q = st.date_input("End (optional)", value=None, key="hod_q_end")
+
+        # Normalize empty dates
+        if start_q and end_q and start_q > end_q:
+            st.error("Start must be before or equal to End.")
+        elif q:
+            # Resolve matching students from section CSV (prefer exact Regd. match, else name contains)
+            student_file = find_csv_for_section(section)
+            if not student_file or not os.path.exists(student_file):
+                st.warning("Student list CSV not found for this section.")
+            else:
+                sdf = pd.read_csv(student_file)
+                sdf.columns = sdf.columns.str.strip()
+                sdf["Regd. No."] = sdf["Regd. No."].astype(str)
+                name_mask = sdf["Name"].astype(str).str.lower().str.contains(q.strip().lower())
+                regd_mask = sdf["Regd. No."].str.lower().str.contains(q.strip().lower())
+                matches = sdf[name_mask | regd_mask].copy()
+
+                if matches.empty:
+                    st.info("No matching student found in the section CSV.")
+                else:
+                    # Get metas for range or full history
+                    def fetch_metas(sec, s=None, e=None):
+                        conn = sqlite3.connect(DB_PATH)
+                        cur = conn.cursor()
+                        if s and e:
+                            cur.execute(
+                                "SELECT id, attendance_date, period FROM attendance_meta "
+                                "WHERE section=? AND attendance_date BETWEEN ? AND ? "
+                                "ORDER BY attendance_date, period",
+                                (sec, str(s), str(e))
+                            )
+                        else:
+                            cur.execute(
+                                "SELECT id, attendance_date, period FROM attendance_meta "
+                                "WHERE section=? ORDER BY attendance_date, period",
+                                (sec,)
+                            )
+                        out = cur.fetchall()
+                        conn.close()
+                        return out
+
+                    metas = fetch_metas(section, start_q, end_q) if (start_q and end_q) else fetch_metas(section)
+                    if not metas:
+                        st.info("No attendance sessions in this timeframe.")
+                    else:
+                        meta_ids = [m[0] for m in metas]
+                        total_classes = len(meta_ids)
+
+                        conn = sqlite3.connect(DB_PATH)
+                        cur = conn.cursor()
+                        placeholders = ",".join(["?"] * len(meta_ids))
+                        results = []
+                        for _, row in matches.iterrows():
+                            regd = str(row["Regd. No."])
+                            cur.execute(
+                                f"SELECT SUM(CASE WHEN present=1 THEN 1 ELSE 0 END) "
+                                f"FROM attendance_rows WHERE regd_no=? AND meta_id IN ({placeholders})",
+                                tuple([regd] + meta_ids)
+                            )
+                            presents = cur.fetchone()[0] or 0
+                            pct = round((presents / total_classes * 100), 2) if total_classes else 0.0
+                            results.append([regd, row["Name"], presents, total_classes, total_classes - presents, pct])
+                        conn.close()
+
+                        out_df = pd.DataFrame(
+                            results,
+                            columns=["Regd. No.", "Name", "Presents", "Total Classes", "Absences", "% Attendance"]
+                        ).sort_values("% Attendance", ascending=True)
+
+                        st.dataframe(out_df, use_container_width=True)
+                        towrite = BytesIO()
+                        out_df.to_excel(towrite, index=False, sheet_name="student_percent_lookup")
+                        towrite.seek(0)
+                        st.download_button(
+                            "📥 Download Lookup (Excel)",
+                            towrite,
+                            file_name=f"student_percent_lookup_{section}.xlsx"
+                        )
+    # ---------- End Quick Lookup ----------
 
     main_mode = st.selectbox("Choose Report Area", [
         "Single Record (saved attendance)",
@@ -1010,24 +1102,49 @@ elif st.session_state.role == "Coordinator":
         st.stop()
 
     df = pd.DataFrame(rows, columns=["meta_id", "Regd. No.", "Name", "Parent Name", "Parent Phone"])
-    # Build a "Periods Absent" list per student
     df["Period"] = df["meta_id"].map(lambda x: meta_map[x]["period"])
     df["Date"] = df["meta_id"].map(lambda x: meta_map[x]["date"])
-    df["Date-Period"] = df.apply(lambda r: f"{r['Date']} (P{r['Period']})", axis=1)
 
-    agg = (
-        df.groupby(["Regd. No.", "Name", "Parent Name", "Parent Phone"], as_index=False)
-          .agg({"Date-Period": lambda s: ", ".join(sorted(set(s))), "meta_id": "count"})
-          .rename(columns={"Date-Period": "Periods Absent", "meta_id": "Absence Count"})
-          .loc[:, ["Regd. No.", "Name", "Parent Name", "Parent Phone", "Periods Absent", "Absence Count"]]
-          .sort_values(["Absence Count", "Regd. No."], ascending=[False, True])
-          .reset_index(drop=True)
+    # ---- NEW: build per-period absence columns P1..P6 (counts) ----
+    # Ensure period is string/number 1..6
+    df["Period"] = df["Period"].astype(str)
+
+    base_group_cols = ["Regd. No.", "Name", "Parent Name", "Parent Phone"]
+    pivot = (
+        df.groupby(base_group_cols + ["Period"])
+          .size()
+          .unstack("Period", fill_value=0)
     )
+
+    # Guarantee columns P1..P6 exist
+    for p in ["1","2","3","4","5","6"]:
+        if p not in pivot.columns:
+            pivot[p] = 0
+
+    pivot = pivot[["1","2","3","4","5","6"]]
+    pivot.columns = [f"P{c}" for c in pivot.columns]
+    pivot = pivot.reset_index()
+
+    # Also keep a compact list of Date (P#) instances like before
+    df["Date-Period"] = df.apply(lambda r: f"{r['Date']} (P{r['Period']})", axis=1)
+    compact = (
+        df.groupby(base_group_cols, as_index=False)
+          .agg({"Date-Period": lambda s: ", ".join(sorted(set(s)))})
+          .rename(columns={"Date-Period": "Periods Absent"})
+    )
+
+    agg = pivot.merge(compact, on=base_group_cols, how="left")
+    period_cols = ["P1","P2","P3","P4","P5","P6"]
+    agg["Absence Count"] = agg[period_cols].sum(axis=1)
+
+    agg = agg.loc[:, base_group_cols + period_cols + ["Absence Count", "Periods Absent"]] \
+             .sort_values(["Absence Count", "Regd. No."], ascending=[False, True]) \
+             .reset_index(drop=True)
 
     st.subheader(f"❌ Absentees — {section} ({start_d} → {end_d})")
     st.dataframe(agg, use_container_width=True)
 
-    # CSV download (as requested)
+    # CSV download (contains P1..P6 columns)
     csv_bytes = agg.to_csv(index=False).encode("utf-8")
     st.download_button(
         "📥 Download Absentees (CSV)",
