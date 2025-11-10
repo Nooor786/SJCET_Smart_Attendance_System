@@ -10,19 +10,23 @@ import hashlib
 # Configuration
 # ------------------------
 import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import base64  # <-- add this import
 
-APP_TITLE = "SJCET - AttendPro"
+APP_TITLE = "SJCET - AttendPro (Advanced)"
 st.markdown(f"<div class=\"centered-title\">🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
+
 # --- College Logo below Title ---
 LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")
 
 if os.path.exists(LOGO_PATH):
+    with open(LOGO_PATH, "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode("utf-8")
+
     st.markdown(
         f"""
         <div style='text-align:center; margin-bottom: 1rem;'>
-            <img src='data:image/png;base64,{open(LOGO_PATH, "rb").read().encode("base64").decode()}' 
-                 alt='College Logo' width='180'>
+            <img src='data:image/png;base64,{b64}' alt='College Logo' width='180'>
         </div>
         """,
         unsafe_allow_html=True
