@@ -9,23 +9,35 @@ import hashlib
 # ------------------------
 # Configuration
 # ------------------------
-import os
-from pathlib import Path
-
-# --- paths (must be BEFORE logo code) ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
+import os, base64
 APP_TITLE = "SJCET - AttendPro (Advanced)"
-st.markdown(f"<div class='centered-title'>🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
 
-# --- logo just below title ---
-LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")
-if os.path.exists(LOGO_PATH):
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.image(LOGO_PATH, width=180)   # adjust width if you like
-else:
-    st.caption("⚠️ Logo file not found. Place 'sjcet_logo.png' beside app.py")
+# ---- Title + centered logo (use once, near the top of the app) ----
+LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")  # make sure BASE_DIR is defined above
+
+def render_branding():
+    if os.path.exists(LOGO_PATH):
+        with open(LOGO_PATH, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        st.markdown(
+            f"""
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin: 6px 0 18px;">
+                <div class="centered-title">🎓 {APP_TITLE}</div>
+                <img src="data:image/png;base64,{b64}" alt="College Logo"
+                     style="width:160px; height:auto; border-radius:10px;" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div style='text-align:center; margin: 6px 0 18px;'>"
+            f"<div class='centered-title'>🎓 {APP_TITLE}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+render_branding()
 
 # Candidates (both common layouts)
 CANDIDATE_STUDENTS_DIRS = [
