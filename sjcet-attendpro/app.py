@@ -255,7 +255,9 @@ def add_default_users():
         ("fac2", hash_password("pass2"), "Faculty"),
         ("fac3", hash_password("pass3"), "Faculty"),
         ("hod", hash_password("pass10"), "HOD"),
-        ("admin", hash_password("admin123"), "Admin")
+        ("admin", hash_password("admin123"), "Admin"),
+        # 👇 ADD THIS LINE
+        ("coord", hash_password("coord123"), "Coordinator"),
     ]
     for u, p, r in default_users:
         try:
@@ -374,7 +376,7 @@ if st.session_state.role == "Admin":
     with st.expander("Add / Update User"):
         uname = st.text_input("Username", key="adm_user")
         pwd = st.text_input("Password", type="password", key="adm_pass")
-        role = st.selectbox("Role", ["Faculty", "HOD", "Admin"], key="adm_role")
+        role = st.selectbox("Role", ["Faculty", "HOD", "Admin", "Coordinator"], key="adm_role")
         if st.button("Save User"):
             if uname and pwd:
                 conn = sqlite3.connect(DB_PATH)
@@ -595,6 +597,7 @@ elif st.session_state.role == "HOD":
         "Weekly Report (7 days)",
         "Monthly Report",
         "Individual Student Report"
+        "Attendance % (Date Range)"
     ])
 
     def fetch_metas_for_section(sec, start=None, end=None):
@@ -862,6 +865,159 @@ elif st.session_state.role == "HOD":
                                 df.to_excel(towrite, index=False, sheet_name='student_absences')
                                 towrite.seek(0)
                                 st.download_button("📥 Download Student Report (Excel)", towrite, file_name=f"student_{sel_regd}_{start}_to_{end}.xlsx")
+        # ==== NEW MODE: Attendance % (Date Range) ====
+        elif main_mode == "Attendance % (Date Range)":
+            c1, c2 = st.columns(2)
+            with c1:
+                start_d = st.date_input("Start Date", date.today() - timedelta(days=30))
+            with c2:
+                end_d = st.date_input("End Date", date.today())
+            if start_d > end_d:
+                st.error("Start Date must be before or equal to End Date.")
+                st.stop()
+        
+            # Fetch all attendance sessions (metas) for the section within range
+            metas = fetch_metas_for_section(section, start=start_d, end=end_d)
+            if not metas:
+                st.info("No attendance sessions in this date range.")
+                st.stop()
+        
+            meta_ids = [m[0] for m in metas]
+            total_classes = len(meta_ids)  # each meta is one period entry
+        
+            # Build a presence table by student
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            q = f"""
+                SELECT regd_no, name, SUM(CASE WHEN present=1 THEN 1 ELSE 0 END) as presents
+                FROM attendance_rows
+                WHERE meta_id IN ({','.join('?'*len(meta_ids))})
+                GROUP BY regd_no, name
+            """
+            c.execute(q, tuple(meta_ids))
+            rows = c.fetchall()
+            conn.close()
+        
+            if not rows:
+                st.info("No attendance rows found for this range.")
+                st.stop()
+        
+            df = pd.DataFrame(rows, columns=["Regd. No.", "Name", "Presents"])
+            df["Total Classes"] = total_classes
+            df["Absences"] = df["Total Classes"] - df["Presents"]
+            df["% Attendance"] = (df["Presents"] / df["Total Classes"] * 100).round(2)
+        
+            # If you want to include all students in the section (even if never marked),
+            # merge with the section CSV:
+            student_file = find_csv_for_section(section)
+            if student_file and os.path.exists(student_file):
+                base_students = pd.read_csv(student_file)[["Regd. No.", "Name"]]
+                merged = base_students.merge(df, on=["Regd. No.", "Name"], how="left").fillna({"Presents":0, "Absences": total_classes, "Total Classes": total_classes, "% Attendance": 0})
+                df = merged
+        
+            st.subheader(f"📊 Attendance % — {section}  ({start_d} → {end_d})")
+            st.dataframe(df.sort_values("% Attendance"), use_container_width=True)
+        
+            towrite = BytesIO()
+            df.to_excel(towrite, index=False, sheet_name="attendance_percent")
+            towrite.seek(0)
+            st.download_button(
+                "📥 Download Attendance % (Excel)",
+                towrite,
+                file_name=f"attendance_percent_{section}_{start_d}_to_{end_d}.xlsx"
+                
+    )
+    # ======================
+# Coordinator Dashboard
+# ======================
+elif st.session_state.role == "Coordinator":
+    st.header("👥 Coordinator Dashboard - Absentees (Read-only)")
+
+    # Pull sections that actually have attendance saved
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT section FROM attendance_meta ORDER BY section")
+    sections_db = [r[0] for r in c.fetchall()]
+    conn.close()
+
+    if not sections_db:
+        st.info("No attendance data found yet.")
+        st.stop()
+
+    section = st.selectbox("Select Section", sections_db)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        start_d = st.date_input("Start Date", date.today() - timedelta(days=7))
+    with col2:
+        end_d = st.date_input("End Date", date.today())
+    if start_d > end_d:
+        st.error("Start Date must be before or equal to End Date.")
+        st.stop()
+
+    # Get metas in range
+    def _fetch_metas(sec, start, end):
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, attendance_date, period, submitted_by FROM attendance_meta "
+            "WHERE section=? AND attendance_date BETWEEN ? AND ? ORDER BY attendance_date, period",
+            (sec, str(start), str(end)),
+        )
+        metas_ = c.fetchall()
+        conn.close()
+        return metas_
+
+    metas = _fetch_metas(section, start_d, end_d)
+    if not metas:
+        st.info("No attendance records in this range.")
+        st.stop()
+
+    meta_ids = [m[0] for m in metas]
+    meta_map = {m[0]: {"date": m[1], "period": m[2]} for m in metas}
+
+    # Pull absentees for those meta_ids
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    q = f"""
+        SELECT meta_id, regd_no, name, parent_name, parent_phone
+        FROM attendance_rows
+        WHERE present=0 AND meta_id IN ({','.join('?'*len(meta_ids))})
+    """
+    c.execute(q, tuple(meta_ids))
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
+        st.success("🎉 No absentees in this date range.")
+        st.stop()
+
+    df = pd.DataFrame(rows, columns=["meta_id", "Regd. No.", "Name", "Parent Name", "Parent Phone"])
+    # Build a "Periods Absent" list per student
+    df["Period"] = df["meta_id"].map(lambda x: meta_map[x]["period"])
+    df["Date"] = df["meta_id"].map(lambda x: meta_map[x]["date"])
+    df["Date-Period"] = df.apply(lambda r: f"{r['Date']} (P{r['Period']})", axis=1)
+
+    agg = (
+        df.groupby(["Regd. No.", "Name", "Parent Name", "Parent Phone"], as_index=False)
+          .agg({"Date-Period": lambda s: ", ".join(sorted(set(s))), "meta_id": "count"})
+          .rename(columns={"Date-Period": "Periods Absent", "meta_id": "Absence Count"})
+          .loc[:, ["Regd. No.", "Name", "Parent Name", "Parent Phone", "Periods Absent", "Absence Count"]]
+          .sort_values(["Absence Count", "Regd. No."], ascending=[False, True])
+          .reset_index(drop=True)
+    )
+
+    st.subheader(f"❌ Absentees — {section} ({start_d} → {end_d})")
+    st.dataframe(agg, use_container_width=True)
+
+    # CSV download (as requested)
+    csv_bytes = agg.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "📥 Download Absentees (CSV)",
+        csv_bytes,
+        file_name=f"absentees_{section}_{start_d}_to_{end_d}.csv",
+        mime="text/csv"
+    )
 
 # =========================
 # Generic fallback
