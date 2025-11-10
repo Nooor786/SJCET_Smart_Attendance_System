@@ -860,20 +860,5 @@ elif st.session_state.role == "HOD":
 else:
     st.info("Your role does not have a specific dashboard yet.")
 
-# ------------------------
-# App Tips / Notes
-# ------------------------
-with st.expander("App Tips & Notes"):
-    st.markdown("""
-    - Put these CSVs into `students_list/` (any of the supported names/aliases work):  
-        • II-CSE_A.csv • II-CSE_B.csv • II-CSE_C.csv • II-CSD.csv • III-CSE.csv • III-CSD.csv  
-      (Aliases also accepted: CSE_DS.csv, CSE.DS.csv, II-CSE_DS.csv, II-CSE.DS.csv, and `lll-CSD.csv` for III-CSD.)
-    - Required CSV columns: `Regd. No., Name` (optional: `Father Name, Parent Ph.-1`).
-    - Periods: **6** per day.
-    - Default users:  
-        • Faculty: fac1/pass1, fac2/pass2, fac3/pass3  
-        • HOD: hod/pass10  
-        • Admin: admin/admin123  
-    - Faculty → mark attendance and submit (data saved to `attendpro.db` and CSV backups under `attendance_records/<section>/`).
-    - HOD → view absentees: single-record, aggregated (date/range), daily, weekly, monthly, or per-student.
-    """)
+ 
+    
