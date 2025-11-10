@@ -12,7 +12,7 @@ import hashlib
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-APP_TITLE = "SJCET - AttendPro (Advanced)"
+APP_TITLE = "SJCET - AttendPro"
 
 # Candidates (both common layouts)
 CANDIDATE_STUDENTS_DIRS = [
