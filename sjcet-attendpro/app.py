@@ -10,27 +10,21 @@ import hashlib
 # Configuration
 # ------------------------
 import os
-import base64  # <-- add this import
+from pathlib import Path
+import streamlit as st
+
+# --- paths (must be BEFORE logo code) ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 APP_TITLE = "SJCET - AttendPro (Advanced)"
-st.markdown(f"<div class=\"centered-title\">🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='centered-title'>🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
 
-# --- College Logo below Title ---
+# --- logo just below title ---
 LOGO_PATH = os.path.join(BASE_DIR, "sjcet_logo.png")
-
 if os.path.exists(LOGO_PATH):
-    with open(LOGO_PATH, "rb") as f:
-        data = f.read()
-        b64 = base64.b64encode(data).decode("utf-8")
-
-    st.markdown(
-        f"""
-        <div style='text-align:center; margin-bottom: 1rem;'>
-            <img src='data:image/png;base64,{b64}' alt='College Logo' width='180'>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.image(LOGO_PATH, width=180)   # adjust width if you like
 else:
     st.caption("⚠️ Logo file not found. Place 'sjcet_logo.png' beside app.py")
 
