@@ -14,15 +14,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 APP_TITLE = "SJCET - AttendPro (Advanced)"
 
-# Your CSVs live at: sjcet-attendpro/students_list
-STUDENTS_FOLDER = os.path.join(BASE_DIR, "sjcet-attendpro", "students_list")
+# Candidates (both common layouts)
+CANDIDATE_STUDENTS_DIRS = [
+    os.path.join(BASE_DIR, "students_list"),                      # app.py and folder at repo root
+    os.path.join(BASE_DIR, "sjcet-attendpro", "students_list"),   # app.py at root, folder inside subdir
+]
 
-# Keep outputs next to app.py (change if you want them elsewhere)
+# Pick the first that exists; otherwise create the first path
+for p in CANDIDATE_STUDENTS_DIRS:
+    if os.path.exists(p) and os.path.isdir(p):
+        STUDENTS_FOLDER = p
+        break
+else:
+    STUDENTS_FOLDER = CANDIDATE_STUDENTS_DIRS[0]
+    os.makedirs(STUDENTS_FOLDER, exist_ok=True)  # allow upload-in-app fallback
+
 ATTENDANCE_FOLDER = os.path.join(BASE_DIR, "attendance_records")
 DB_PATH = os.path.join(BASE_DIR, "attendpro.db")
-
-os.makedirs(STUDENTS_FOLDER, exist_ok=True)
 os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
+
+# --- (Optional) debug: see what the server actually sees. Remove later. ---
+import glob
+try:
+    import streamlit as st  # already imported above, but safe if moved
+    st.caption(f"Using students_list at: {STUDENTS_FOLDER}")
+    st.caption("Exists? " + str(os.path.exists(STUDENTS_FOLDER)))
+    st.caption("Files: " + (", ".join(sorted([os.path.basename(f) for f in glob.glob(os.path.join(STUDENTS_FOLDER, "*.csv"))])) or "(none)"))
+except Exception:
+    pass
 # ------------------------
 # Section name normalization / alias resolver
 # ------------------------
