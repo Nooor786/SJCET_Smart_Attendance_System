@@ -11,12 +11,11 @@ import hashlib
 # ------------------------
 import os
 from pathlib import Path
-import streamlit as st
 
 # --- paths (must be BEFORE logo code) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-APP_TITLE = "SJCET - AttendPro (Advanced)"
+#APP_TITLE = "SJCET - AttendPro (Advanced)"
 st.markdown(f"<div class='centered-title'>🎓 {APP_TITLE}</div>", unsafe_allow_html=True)
 
 # --- logo just below title ---
