@@ -443,12 +443,6 @@ else:
     st.sidebar.caption("Optional: add a Lottie animation (intro.json) next to app.py for a visual intro.")
 st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-# Quick message about Streamlit sleep policy (informational)
-st.info(
-    "Note: Streamlit Cloud (free) may put apps to sleep when idle. "
-    "To keep the app always reachable consider using an uptime-monitoring service (UptimeRobot / Freshping) "
-    "or host on an always-on provider (VPS / Render with paid plan / DigitalOcean)."
-)
 
 # =========================
 # Session State (Auth)
