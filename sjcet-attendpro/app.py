@@ -176,7 +176,7 @@ def render_branding():
             b64 = base64.b64encode(f.read()).decode("utf-8")
         st.markdown(
             f"""
-            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin: 4px 0 16px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin: 28px 0 24px;">
                 <img src="data:image/png;base64,{b64}" alt="College Logo"
                      style="width:160px; height:auto; border-radius:10px;" />
                 <div class="centered-title">🎓 {APP_TITLE}</div>
@@ -187,13 +187,12 @@ def render_branding():
     else:
         st.markdown(
             f"""
-            <div style="text-align:center; margin: 4px 0 16px;">
+            <div style="text-align:center; margin: 28px 0 24px;">
                 <div class="centered-title">🎓 {APP_TITLE}</div>
             </div>
             """,
             unsafe_allow_html=True
         )
-
 render_branding()
 
 # =========================
