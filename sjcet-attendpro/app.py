@@ -53,63 +53,57 @@ DB_PATH = os.path.join(BASE_DIR, "attendpro.db")
 os.makedirs(ATTENDANCE_FOLDER, exist_ok=True)
 
 # =========================
-# UI: Global CSS (Fancy Mode-ready)
+# UI: Global CSS (Theme-aware)
 # =========================
 APP_CSS = """
 <style>
 :root{
-  --glass-bg: rgba(255,255,255,0.06);
-  --glass-border: rgba(255,255,255,0.15);
-  --brand-1:#00d0ff;
-  --brand-2:#00ffa3;
+  --bg-1-dark: #072a34;
+  --bg-2-dark: #0a3f49;
+  --bg-3-dark: #0c555a;
+  --glass-dark: rgba(255,255,255,0.06);
+  --glass-border-dark: rgba(255,255,255,0.12);
+  --text-dark: #e6f6f5;
+
+  --bg-1-light: #f6fbfb;
+  --bg-2-light: #e8f7f6;
+  --bg-3-light: #dff3f2;
+  --glass-light: rgba(0,0,0,0.04);
+  --glass-border-light: rgba(0,0,0,0.08);
+  --text-light: #0b2b2c;
+
+  --brand-1: #0077b6;
+  --brand-2: #00b4d8;
+
+  --kpi-bg: rgba(255,255,255,0.02);
 }
 
-/* Background (animated when .fancy present on body) */
+/* Default (assume dark) */
 [data-testid="stAppViewContainer"]{
-  background: radial-gradient(1200px circle at 12% 8%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
+  background: radial-gradient(1200px circle at 12% 8%, var(--bg-3-dark) 0%, var(--bg-2-dark) 35%, var(--bg-1-dark) 100%) !important;
+  color: var(--text-dark);
 }
-.fancy [data-testid="stAppViewContainer"]{
-  animation: bgshift 14s ease-in-out infinite;
-  background: radial-gradient(1200px circle at 20% 10%, #0c555a 0%, #0a3f49 35%, #072a34 100%) !important;
-}
-@keyframes bgshift{
-  0%{ background-position: 0% 0%; }
-  50%{ background-position: 100% 80%; }
-  100%{ background-position: 0% 0%; }
-}
-
-[data-testid="stHeader"]{ background: rgba(0,0,0,0) !important; }
 .block-container{ padding-top: 1.2rem; }
 
 /* Buttons */
 .stButton>button{
   border-radius: 12px !important;
   font-weight: 700 !important;
-  border: 1px solid var(--glass-border) !important;
-  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border-dark) !important;
+  background: var(--glass-dark) !important;
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s;
-  box-shadow: 0 6px 24px rgba(0,0,0,.15);
-}
-.fancy .stButton>button:hover{
-  transform: translateY(-1px) scale(1.01);
-  box-shadow: 0 10px 36px rgba(0,0,0,.25);
-  border-color: rgba(0,255,163,.35) !important;
+  color: var(--text-dark) !important;
 }
 
-/* Glass cards */
+/* Cards & glass */
 .attn-card{
   border-radius: 14px;
   padding: 12px 10px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-dark);
+  background: var(--glass-dark);
   backdrop-filter: blur(6px);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   text-align: center;
-}
-.fancy .attn-card:hover{
-  transform: translateY(-2px);
-  border-color: rgba(0,208,255,.35);
-  box-shadow: 0 12px 32px rgba(0,0,0,.28);
 }
 
 /* Title */
@@ -124,43 +118,44 @@ APP_CSS = """
   -webkit-text-fill-color: transparent;
 }
 
-/* Toggle label */
-.stToggle{ text-align:center; margin-top: 6px !important; }
-.stToggle label{ font-size:.9rem !important; font-weight:700 !important; }
-
-/* KPI pulse */
-.pulse{ position:relative; }
-.fancy .pulse::after{
-  content:"";
-  position:absolute; inset:-2px;
-  border-radius:14px;
-  animation:pulse 2.2s infinite ease-in-out;
-  border:1px solid rgba(0,255,163,.18);
-}
-@keyframes pulse{
-  0%{ transform: scale(1); opacity:.9; }
-  70%{ transform: scale(1.03); opacity: 0; }
-  100%{ transform: scale(1.03); opacity: 0; }
-}
-
 /* Dataframe glass */
 [data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"]{ row-gap:.25rem !important; }
 [data-testid="stDataFrame"]{
   border-radius: 12px; overflow:hidden;
-  border:1px solid var(--glass-border);
-  background: var(--glass-bg);
+  border:1px solid var(--glass-border-dark);
+  background: var(--glass-dark);
   backdrop-filter: blur(6px);
 }
 
-/* Shimmer divider */
-.shimmer{
-  height:1px; width:100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
-  animation: shimmer 1.8s linear infinite;
+/* Light theme overrides */
+@media (prefers-color-scheme: light) {
+  :root {
+    --glass: var(--glass-light);
+    --glass-border: var(--glass-border-light);
+    --text: var(--text-light);
+  }
+  [data-testid="stAppViewContainer"]{
+    background: radial-gradient(1200px circle at 12% 8%, var(--bg-3-light) 0%, var(--bg-2-light) 35%, var(--bg-1-light) 100%) !important;
+    color: var(--text-light);
+  }
+  .stButton>button{
+    border: 1px solid var(--glass-border-light) !important;
+    background: var(--glass-light) !important;
+    color: var(--text-light) !important;
+  }
+  .attn-card{
+    border: 1px solid var(--glass-border-light);
+    background: var(--glass-light);
+    color: var(--text-light);
+  }
+  [data-testid="stDataFrame"]{
+    border:1px solid var(--glass-border-light);
+    background: var(--glass-light);
+    color: var(--text-light);
+  }
 }
-@keyframes shimmer{ 0%{background-position:-200px 0;} 100%{background-position:200px 0;} }
 
-/* Mobile */
+/* Small screens */
 @media (max-width:640px){
   .block-container{ padding-left:.6rem; padding-right:.6rem; }
   .centered-title{ font-size:1.3rem; }
@@ -386,40 +381,8 @@ init_db()
 add_default_users()
 
 # =========================
-# Fancy helpers (KPI, celebrate, table)
+# Small helpers (table, kpi, celebrate)
 # =========================
-def kpi_row(title_left, value_left, delta_left,
-            title_mid, value_mid, delta_mid,
-            title_right, value_right, delta_right):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        with st.container():
-            st.markdown('<div class="pulse">', unsafe_allow_html=True)
-            st.metric(title_left, value_left, delta=delta_left)
-            st.markdown("</div>", unsafe_allow_html=True)
-    with c2:
-        with st.container():
-            st.markdown('<div class="pulse">', unsafe_allow_html=True)
-            st.metric(title_mid, value_mid, delta=delta_mid)
-            st.markdown("</div>", unsafe_allow_html=True)
-    with c3:
-        with st.container():
-            st.markdown('<div class="pulse">', unsafe_allow_html=True)
-            st.metric(title_right, value_right, delta=delta_right)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-def celebrate(event="success"):
-    try:
-        if event == "success":
-            st.toast("Saved!", icon="✅")
-            st.snow()
-        elif event == "party":
-            st.balloons()
-        else:
-            st.balloons()
-    except Exception:
-        st.balloons()
-
 def render_table(df, key=None, height=460, fit_cols=True, editable=False, group_by=None, enable_sidebar=True):
     if not HAS_AGGRID:
         st.dataframe(df, use_container_width=True, height=height)
@@ -446,25 +409,46 @@ def render_table(df, key=None, height=460, fit_cols=True, editable=False, group_
         key=key
     )
 
+def kpi_row(title_left, value_left, delta_left,
+            title_mid, value_mid, delta_mid,
+            title_right, value_right, delta_right):
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric(title_left, value_left, delta=delta_left)
+    with c2:
+        st.metric(title_mid, value_mid, delta=delta_mid)
+    with c3:
+        st.metric(title_right, value_right, delta=delta_right)
+
+def celebrate(event="success"):
+    try:
+        if event == "success":
+            st.balloons()
+        else:
+            st.balloons()
+    except Exception:
+        pass
+
 # =========================
-# Fancy Mode toggle + Visual Intro (auto)
+# Visual Intro (optional)
 # =========================
 st.sidebar.markdown("---")
-fancy_mode = st.sidebar.toggle("✨ Fancy Mode", value=True, help="Turn on richer animations & styling")
-st.markdown(f"<script>document.body.classList.toggle('fancy',{str(fancy_mode).lower()});</script>", unsafe_allow_html=True)
+if HAS_LOTTIE:
+    try:
+        with open(os.path.join(BASE_DIR, "intro.json"), "r") as f:
+            st_lottie(json.load(f), height=120, loop=True)
+    except Exception:
+        pass
+else:
+    st.sidebar.caption("Optional: add a Lottie animation (intro.json) next to app.py for a visual intro.")
+st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-# Always show Visual Intro on load (no expander, auto display)
-intro_container = st.container()
-with intro_container:
-    if HAS_LOTTIE:
-        try:
-            with open(os.path.join(BASE_DIR, "intro.json"), "r") as f:
-                st_lottie(json.load(f), height=140, loop=True)
-        except Exception:
-            st.caption("Tip: Add a Lottie animation named intro.json next to app.py for a visual intro.")
-    else:
-        st.caption("Optional: pip install streamlit-lottie to show a visual intro animation.")
-st.markdown("<div class='shimmer'></div>", unsafe_allow_html=True)
+# Quick message about Streamlit sleep policy (informational)
+st.info(
+    "Note: Streamlit Cloud (free) may put apps to sleep when idle. "
+    "To keep the app always reachable consider using an uptime-monitoring service (UptimeRobot / Freshping) "
+    "or host on an always-on provider (VPS / Render with paid plan / DigitalOcean)."
+)
 
 # =========================
 # Session State (Auth)
@@ -480,9 +464,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     with st.container():
         st.subheader("🔐 Login")
-
         selected_role = st.selectbox("Select Role", ["Faculty", "Coordinator", "HOD", "Admin"])
-
         cols = st.columns([1,2,1])
         with cols[1]:
             username = st.text_input("Username", placeholder="Enter username")
@@ -994,7 +976,7 @@ elif st.session_state.role == "HOD":
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='weekly')
                     towrite.seek(0)
-                    st.download_button("📥 Download Weekly (Excel)", towrite, file_name=f"weekly_absentees_{section}_{start_week}_to_{end_week}.xlsx")
+                    st.download_button("📥 Download Weekly (Excel)", towrite, file_name=f"weekly_absentees_{section}_{start_week}_to_{end_week}.csv")
 
     elif main_mode == "Monthly Report":
         any_date_in_month = st.date_input("Pick any date in the month to report", date.today())
@@ -1027,7 +1009,7 @@ elif st.session_state.role == "HOD":
                     towrite = BytesIO()
                     df_group.to_excel(towrite, index=False, sheet_name='monthly')
                     towrite.seek(0)
-                    st.download_button("📥 Download Monthly (Excel)", towrite, file_name=f"monthly_absentees_{section}_{month_start.year}_{month_start.month}.xlsx")
+                    st.download_button("📥 Download Monthly (Excel)", towrite, file_name=f"monthly_absentees_{section}_{month_start.year}_{month_start.month}.csv")
 
     elif main_mode == "Individual Student Report":
         student_file = find_csv_for_section(section)
